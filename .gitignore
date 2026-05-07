@@ -1,0 +1,7 @@
+agent/.env
+frontend/.env.local
+keys
+node_modules/
+.next/
+*.log
+IMPLEMENTATION_PLAN.md

@@ -1,0 +1,14 @@
+{
+  "name": "ai-newsroom-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "engines": { "node": ">=22.0.0" },
+  "scripts": {
+    "pipeline": "node src/pipeline.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "dotenv": "^16.4.5",
+    "fast-xml-parser": "^4.4.1"
+  }
+}
