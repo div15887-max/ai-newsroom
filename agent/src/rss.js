@@ -1,13 +1,21 @@
-// agent/src/rss.js — fetches Google News RSS and returns structured articles
 import { XMLParser } from 'fast-xml-parser';
 
-const RSS_URL =
-  'https://news.google.com/rss/search?q=artificial+intelligence+machine+learning&hl=en-US&gl=US&ceid=US:en';
+export const CATEGORY_FEEDS = {
+  'AI':         'artificial+intelligence+machine+learning',
+  'Technology': 'technology+news',
+  'Startups':   'startups+venture+capital',
+  'Gaming':     'gaming+video+games',
+};
 
 const parser = new XMLParser({ ignoreAttributes: false });
 
-export async function fetchRssArticles(limit = 15) {
-  const response = await fetch(RSS_URL, {
+export async function fetchRssArticles(category, limit = 15) {
+  const query = CATEGORY_FEEDS[category];
+  if (!query) throw new Error(`Unknown category: ${category}`);
+
+  const url = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
+
+  const response = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AI-Newsroom/1.0)' },
     signal: AbortSignal.timeout(30_000),
   });
@@ -25,11 +33,11 @@ export async function fetchRssArticles(limit = 15) {
     url:          String(item.link ?? ''),
     source:       extractSource(item),
     published_at: parsePubDate(String(item.pubDate ?? '')),
+    category,
   })).filter(a => a.url && a.title);
 }
 
 function cleanTitle(title) {
-  // Google News appends " - Source Name" to titles — strip it
   return title.replace(/\s-\s[^-]+$/, '').trim();
 }
 

@@ -4,7 +4,8 @@
   "type": "module",
   "engines": { "node": ">=22.0.0" },
   "scripts": {
-    "pipeline": "node src/pipeline.js"
+    "pipeline": "node src/pipeline.js",
+    "test": "node --test src/__tests__/rss.test.js src/__tests__/summarizer.test.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
