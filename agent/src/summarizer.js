@@ -35,7 +35,8 @@ export async function summarizeArticles(articles) {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`Ollama API error ${response.status}: ${body.slice(0, 200)}`);
+    console.error(`[summarizer] API error ${response.status}: ${body.slice(0, 200)}`);
+    return nullSummaries(articles);
   }
 
   const data = await response.json();
