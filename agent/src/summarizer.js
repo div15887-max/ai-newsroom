@@ -1,6 +1,6 @@
 const BASE_URL = process.env.OLLAMA_BASE_URL;
 const API_KEY  = process.env.OLLAMA_API_KEY;
-const MODEL    = process.env.OLLAMA_MODEL || 'llama3.2:3b';
+const MODEL    = process.env.OLLAMA_MODEL || 'ministral-3:3b';
 
 const SYSTEM_PROMPT = `You are a professional journalist. You receive a JSON array of news articles.
 For each article, write a neutral, factual 2-3 sentence summary based on its title.
