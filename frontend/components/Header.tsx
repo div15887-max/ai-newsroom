@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 type Props = { articleCount: number; activeCategory?: string };
 
 export function Header({ articleCount, activeCategory }: Props) {
@@ -7,19 +9,28 @@ export function Header({ articleCount, activeCategory }: Props) {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">
+              <Link
+                href="/"
+                className="text-xl font-bold tracking-tight text-white sm:text-2xl hover:text-white/80 transition-colors"
+              >
                 DIVYANI&apos;S AI NEWSROOM
-              </h1>
+              </Link>
               <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse-slow" />
                 LIVE
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-white/40">
-              {activeCategory && activeCategory !== 'All'
-                ? `${activeCategory} · AI-powered autonomous newsfeed`
-                : 'AI-powered autonomous newsfeed'}
-            </p>
+            <div className="mt-0.5 flex items-center gap-2 text-xs text-white/40">
+              <Link href="/" className="hover:text-white/70 transition-colors">
+                ← Back to intro
+              </Link>
+              <span>·</span>
+              <span>
+                {activeCategory && activeCategory !== 'All'
+                  ? `${activeCategory} · AI-powered autonomous newsfeed`
+                  : 'AI-powered autonomous newsfeed'}
+              </span>
+            </div>
           </div>
           <div className="text-right">
             <span className="text-2xl font-bold text-white">{articleCount}</span>

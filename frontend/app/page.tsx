@@ -4,6 +4,7 @@ import type { Article } from '@/lib/supabase';
 import { Header } from '@/components/Header';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { ArticleGrid } from '@/components/ArticleGrid';
+import { IntroScreen } from '@/components/IntroScreen';
 
 export const revalidate = 60;
 
@@ -33,6 +34,13 @@ export default async function HomePage({
   searchParams: Promise<{ category?: string }>;
 }) {
   const { category } = await searchParams;
+
+  // No category param → intro state. No DB query, no articles rendered.
+  if (!category) {
+    return <IntroScreen />;
+  }
+
+  // Category selected → fetch and display articles.
   const articles = await getArticles(category);
 
   return (
