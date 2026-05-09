@@ -32,7 +32,7 @@ export async function insertArticles(articles) {
 
   const { error } = await supabase
     .from('articles')
-    .insert(rows, { onConflict: 'url', ignoreDuplicates: true });
+    .upsert(rows, { onConflict: 'url', ignoreDuplicates: true });
 
   if (error) throw new Error(`Supabase insert failed: ${error.message}`);
   return rows.length;

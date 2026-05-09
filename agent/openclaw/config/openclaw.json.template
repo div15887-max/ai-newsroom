@@ -1,0 +1,25 @@
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ollama-cloud": {
+        "baseUrl": "https://api.ollama.com",
+        "apiKey": "${OLLAMA_API_KEY}",
+        "api": "ollama",
+        "models": [
+          {
+            "id": "ministral-3:3b",
+            "name": "Ministral 3B (Ollama Cloud)",
+            "contextWindow": 32768,
+            "maxTokens": 4096
+          }
+        ]
+      }
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "port": 18789
+  }
+}
