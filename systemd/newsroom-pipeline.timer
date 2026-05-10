@@ -1,0 +1,11 @@
+[Unit]
+Description=AI Newsroom Pipeline — runs every 6 hours
+Requires=newsroom-pipeline.service
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
