@@ -1,18 +1,49 @@
-# AI Newsroom
+# Divyani's AI Newsroom
 
 An autonomous newsroom that collects, summarises, and displays the latest AI/ML industry news — running 24/7 without manual intervention.
 
-**Live:** _coming soon_
+**Live:** https://ai-newsroom-zeta.vercel.app  
+**Repo:** https://github.com/div15887-max/ai-newsroom
 
 ---
 
 ## What it does
 
-1. A pipeline script runs every 6 hours on a VPS
-2. It fetches the latest AI/ML articles from Google News RSS
-3. An LLM (Ollama) writes a short summary for each article
-4. Articles are stored in Supabase (duplicates are automatically skipped)
-5. A Next.js frontend on Vercel reads from Supabase and displays them
+1. A pipeline runs every 6 hours on an AWS EC2 VPS
+2. OpenClaw agents fetch the latest articles across 4 categories from Google News RSS
+3. An Ollama LLM writes a concise 2–3 sentence summary for each article
+4. A tagger agent assigns each article to a category (AI · Technology · Startups · Gaming)
+5. Articles are stored in Supabase (duplicates silently skipped via `url UNIQUE`)
+6. A Next.js frontend on Vercel reads from Supabase and shows them with a cinematic newsroom intro
+
+---
+
+## Architecture
+
+```
+AWS EC2 t3.micro (Ubuntu 22.04)
+  │
+  ├─ systemd timer (every 6 h)
+  │       │
+  │       ▼
+  │  run-pipeline.sh
+  │       │
+  │       ▼
+  │  OpenClaw Gateway (port 18789, loopback)
+  │       │
+  │       ├─► newsroom-collector  (validates + cleans RSS articles)
+  │       ├─► newsroom-summarizer (Ollama LLM → 2–3 sentence summaries)
+  │       └─► newsroom-tagger     (Ollama LLM → category assignment)
+  │                   │
+  │       pipeline.js └─► Supabase (service key, write)
+  │
+  └─────────────────────────────────────┐
+                                        │ (anon key, read-only)
+                                        ▼
+                          Vercel — Next.js 15 App Router
+                          ISR revalidate: 60 s
+                          https://ai-newsroom-zeta.vercel.app
+```
 
 ---
 
@@ -20,14 +51,16 @@ An autonomous newsroom that collects, summarises, and displays the latest AI/ML 
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| Agent runtime | OpenClaw | Multi-agent orchestration on the VPS |
-| News source | Google News RSS | Free, no API key, reliable |
+| Agent runtime | OpenClaw | Multi-agent orchestration |
+| News source | Google News RSS (4 feeds) | Free, no API key, reliable |
 | LLM | Ollama Cloud `ministral-3:3b` | Free tier, fast, low token cost |
 | Database | Supabase (PostgreSQL) | Hosted, free tier, excellent JS SDK |
-| Frontend | Next.js 15 + Tailwind | App Router, Server Components, fast |
-| Hosting | Vercel | Free tier, auto-deploys from GitHub |
-| VPS | Oracle Cloud Free Tier | Always-free ARM VM, 4 cores 24 GB |
-| Scheduler | systemd timer | Built-in Linux scheduler with logging |
+| Frontend | Next.js 15 + Tailwind CSS + Framer Motion | App Router, Server Components |
+| Frontend hosting | Vercel | Free tier, auto-deploys from GitHub |
+| VPS | AWS EC2 t3.micro (free tier) | Persistent Linux compute |
+| Scheduler | systemd timer | Built-in, journald logs, survives reboots |
+
+**Cost: $0/month on all services.**
 
 ---
 
@@ -37,60 +70,185 @@ An autonomous newsroom that collects, summarises, and displays the latest AI/ML 
 ai-newsroom/
 ├── agent/
 │   ├── src/
-│   │   ├── pipeline.js      # Main orchestrator — runs the full pipeline
-│   │   ├── rss.js           # Fetches and parses Google News RSS
-│   │   └── supabase.js      # Writes articles to Supabase
-│   └── .env.example         # Environment variable template
-├── frontend/                # Next.js app (Vercel)
+│   │   ├── pipeline.js          # Main orchestrator
+│   │   ├── rss.js               # Google News RSS fetcher (4 categories)
+│   │   ├── summarizer.js        # Ollama Cloud LLM summarization
+│   │   ├── supabase.js          # Supabase write helper (dedup + insert)
+│   │   └── openclaw-pipeline.js # OpenClaw agent calls (summarizer + tagger)
+│   ├── openclaw/
+│   │   ├── config/openclaw.json.template
+│   │   └── skills/
+│   │       ├── newsroom-collector/SKILL.md
+│   │       ├── newsroom-summarizer/SKILL.md
+│   │       └── newsroom-tagger/SKILL.md
+│   ├── .env.example
+│   └── package.json
+├── frontend/                    # Next.js 15 app (Vercel)
+│   ├── app/
+│   ├── components/
+│   └── lib/supabase.ts
 ├── scripts/
-│   └── setup-supabase.sql   # Run once to create the DB schema
+│   ├── setup-supabase.sql       # Run once in Supabase SQL Editor
+│   ├── setup-vps.sh             # One-shot VPS bootstrap (Node 22 + OpenClaw)
+│   ├── configure-openclaw.sh    # Copies skills, writes ~/.openclaw/env
+│   └── run-pipeline.sh          # Called by systemd on each run
+├── systemd/
+│   ├── openclaw-gateway.service # Keeps OpenClaw gateway running
+│   ├── newsroom-pipeline.service
+│   └── newsroom-pipeline.timer  # Fires at 00/06/12/18:00 UTC
 └── README.md
 ```
 
 ---
 
-## Local Setup
+## Full Redeploy Guide
 
-### 1. Supabase
-```
-- Create a project at supabase.com
-- Run scripts/setup-supabase.sql in the SQL Editor
-- Copy your Project URL, anon key, and service_role key
-```
+### Prerequisites
 
-### 2. Run the pipeline locally
+- AWS account (free tier) — EC2 instance
+- Supabase account (free tier) — database
+- Ollama Cloud account (free tier) — LLM API
+- Vercel account (free tier) — frontend hosting
+- Node.js 22 LTS on your local machine
+
+---
+
+### Step 1 — Supabase
+
+1. Create a project at [supabase.com](https://supabase.com)
+2. SQL Editor → New Query → paste `scripts/setup-supabase.sql` → Run
+3. Settings → API → copy:
+   - **Project URL** → `SUPABASE_URL`
+   - **anon/public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend, read-only)
+   - **service_role key** → `SUPABASE_SERVICE_KEY` (pipeline only, never commit)
+
+---
+
+### Step 2 — Ollama Cloud
+
+1. Sign up at [ollama.com](https://ollama.com)
+2. Create an API key
+3. Note the base URL (e.g. `https://api.ollama.com`)
+4. Model: `ministral-3:3b`
+
+---
+
+### Step 3 — Local Pipeline Test
+
 ```bash
 cd agent
 cp .env.example .env
-# Fill in SUPABASE_URL and SUPABASE_SERVICE_KEY
+# Fill in SUPABASE_URL, SUPABASE_SERVICE_KEY, OLLAMA_API_KEY, OLLAMA_BASE_URL
 npm install
 node src/pipeline.js
+# Verify rows appear in Supabase Table Editor
 ```
 
-### 3. Run the frontend locally
+---
+
+### Step 4 — Frontend (Vercel)
+
 ```bash
 cd frontend
 cp .env.local.example .env.local
 # Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
 npm install
-npm run dev
-# Open http://localhost:3000
+npm run dev        # verify at localhost:3000
+npm run build      # confirm no TypeScript errors
+```
+
+**Deploy to Vercel:**
+1. Push repo to GitHub
+2. [vercel.com/new](https://vercel.com/new) → Import repo
+3. Set **Root Directory** to `frontend/`
+4. Add env vars: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+5. Deploy
+
+---
+
+### Step 5 — AWS EC2 VPS
+
+**Launch instance:**
+- AMI: Ubuntu Server 22.04 LTS (free tier eligible)
+- Instance type: t3.micro
+- Key pair: RSA, download `.pem`
+- Security group: allow SSH (port 22)
+
+**Connect (Windows):**
+```powershell
+icacls newsroom-key.pem /inheritance:r
+icacls newsroom-key.pem /grant:r "$($env:USERNAME):R"
+ssh -i newsroom-key.pem ubuntu@<PUBLIC-IP>
+```
+
+**On the VPS:**
+```bash
+# Bootstrap (installs Node 22 + OpenClaw)
+git clone https://github.com/div15887-max/ai-newsroom.git
+cd ai-newsroom
+sudo bash scripts/setup-vps.sh
+
+# Configure
+cd agent
+cp .env.example .env
+nano .env          # fill in all values; set USE_OPENCLAW=true
+# generate gateway token: openssl rand -hex 32
+
+cd ..
+bash scripts/configure-openclaw.sh
+
+# Manual test run
+cd agent && node src/pipeline.js
+# Confirm new articles appear in Supabase
+```
+
+**Install systemd automation:**
+```bash
+cp systemd/*.service ~/.config/systemd/user/
+cp systemd/*.timer   ~/.config/systemd/user/
+systemctl --user daemon-reload
+
+# Start OpenClaw gateway
+systemctl --user enable --now openclaw-gateway.service
+systemctl --user status openclaw-gateway.service   # should show: active (running)
+
+# Enable pipeline timer
+systemctl --user enable --now newsroom-pipeline.timer
+systemctl --user list-timers   # confirm next trigger shown
+```
+
+---
+
+## Monitoring
+
+```bash
+# Follow live pipeline logs
+journalctl --user -u newsroom-pipeline.service -f
+
+# Check scheduled runs
+systemctl --user list-timers
+
+# Manual one-off run
+systemctl --user start newsroom-pipeline.service
 ```
 
 ---
 
 ## Environment Variables
 
-**agent/.env**
+**`agent/.env`** (VPS only, never commit)
 ```
 SUPABASE_URL=
 SUPABASE_SERVICE_KEY=
 OLLAMA_API_KEY=
 OLLAMA_BASE_URL=
 OLLAMA_MODEL=ministral-3:3b
+OPENCLAW_GATEWAY_URL=http://127.0.0.1:18789
+OPENCLAW_GATEWAY_TOKEN=
+USE_OPENCLAW=true
 ```
 
-**frontend/.env.local**
+**`frontend/.env.local`** (safe for browser, read-only)
 ```
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
