@@ -37,7 +37,12 @@ async function runCategory(category) {
   let processed;
   if (USE_OPENCLAW) {
     const summarized = await ocSummarize(newArticles);
-    processed = await ocTag(summarized);
+    const tagged = await ocTag(summarized);
+
+    processed = summarized.map((article, index) => ({
+      ...article,
+      ...(tagged[index] || {}),
+    }));
   } else {
     processed = await ollamaSummarize(newArticles);
   }

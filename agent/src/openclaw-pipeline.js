@@ -8,15 +8,18 @@
  * Locally on Windows we call Ollama Cloud directly (same API, same model).
  */
 import { readFileSync } from 'fs';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = join(__dirname, '..', 'openclaw', 'skills');
 
-const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || 'https://api.ollama.com';
+const OLLAMA_BASE = process.env.OPENCLAW_GATEWAY_URL || 'http://127.0.0.1:18789';
 const OLLAMA_KEY  = process.env.OLLAMA_API_KEY;
 const MODEL       = process.env.OLLAMA_MODEL || 'ministral-3:3b';
+const execFileAsync = promisify(execFile);
 
 function loadSkill(agentId) {
   return readFileSync(join(SKILLS_DIR, agentId, 'SKILL.md'), 'utf8');
@@ -29,34 +32,45 @@ function stripFences(text) {
 async function callAgent(agentId, articles) {
   const systemPrompt = loadSkill(agentId);
 
-  const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OLLAMA_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: `Input:\n${JSON.stringify(articles, null, 2)}` },
-      ],
-      stream: false,
-      options: { temperature: 0.2 },
-    }),
-    signal: AbortSignal.timeout(180_000),
-  });
+    const prompt = `
+System:
+${systemPrompt}
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Ollama API ${res.status}: ${body.slice(0, 200)}`);
+User:
+Input:
+${JSON.stringify(articles, null, 2)}
+`;
+
+  const { stdout, stderr } = await execFileAsync(
+    'openclaw',
+    [
+      'infer',
+      'model',
+      'run',
+      '--model',
+      `ollama-cloud/${MODEL}`,
+      '--prompt',
+      prompt,
+    ],
+    {
+      timeout: 180000,
+      maxBuffer: 1024 * 1024 * 10,
+    }
+  );
+
+  if (stderr && stderr.trim()) {
+    console.warn(`[${agentId}] stderr:`, stderr);
   }
 
-  const data = await res.json();
-  const raw = data?.message?.content ?? '';
+    const cleaned = stdout
+    .replace(/^.*?outputs:\s*\d+\s*/s, '')
+    .trim();
+
+  const raw = cleaned;
 
   try {
     const parsed = JSON.parse(stripFences(raw));
+    console.log(`[${agentId}] Parsed output:`, JSON.stringify(parsed, null, 2));
     return Array.isArray(parsed) ? parsed : null;
   } catch {
     console.error(`[${agentId}] JSON parse failed. Raw:`, raw.slice(0, 400));
