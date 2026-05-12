@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { getRecentRuns, getArticleCount } from '@/lib/status';
 import type { PipelineRun } from '@/lib/status';
+import PipelineTrigger from './PipelineTrigger';
+import PipelineLogs from './PipelineLogs';
 
 export const revalidate = 60;
 
@@ -89,6 +91,8 @@ export default async function StatusPage() {
           ))}
         </div>
 
+        <PipelineTrigger />
+
         {/* Run history table */}
         <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-white/[0.06]">
@@ -164,6 +168,8 @@ export default async function StatusPage() {
             ))}
           </div>
         </div>
+
+        <PipelineLogs />
 
       </div>
     </div>
