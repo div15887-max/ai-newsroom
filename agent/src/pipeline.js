@@ -1,29 +1,38 @@
 import 'dotenv/config';
 import { fetchRssArticles, CATEGORY_FEEDS } from './rss.js';
-import { filterNewArticles, insertArticles } from './supabase.js';
+import {
+  filterNewArticles,
+  insertArticles,
+  createPipelineRun,
+  completePipelineRun,
+  failPipelineRun,
+} from './supabase.js';
 import { summarizeArticles as ollamaSummarize } from './summarizer.js';
 
 const USE_OPENCLAW = process.env.USE_OPENCLAW === 'true';
-const CATEGORIES = Object.keys(CATEGORY_FEEDS);
+const CATEGORIES   = Object.keys(CATEGORY_FEEDS);
 
 let ocSummarize, ocTag;
 if (USE_OPENCLAW) {
   const oc = await import('./openclaw-pipeline.js');
   ocSummarize = oc.summarizeArticles;
-  ocTag = oc.tagArticles;
+  ocTag       = oc.tagArticles;
 }
+
+// Per-category fetch count: small batches keep LLM JSON output reliable
+const ARTICLES_PER_CATEGORY = 4;
 
 async function runCategory(category) {
   console.log(`\n[pipeline] ── ${category} ──`);
 
-  const articles = await fetchRssArticles(category, 8);
+  const articles = await fetchRssArticles(category, ARTICLES_PER_CATEGORY);
   console.log(`[pipeline] Fetched ${articles.length} articles`);
 
   const newArticles = await filterNewArticles(articles);
   const skipped = articles.length - newArticles.length;
   console.log(`[pipeline] ${newArticles.length} new (${skipped} skipped)`);
 
-  if (newArticles.length === 0) return 0;
+  if (newArticles.length === 0) return { fetched: articles.length, saved: 0 };
 
   let processed;
   if (USE_OPENCLAW) {
@@ -35,25 +44,51 @@ async function runCategory(category) {
 
   const saved = await insertArticles(processed);
   console.log(`[pipeline] Saved ${saved} articles`);
-  return saved;
+  return { fetched: articles.length, saved };
 }
 
 async function runPipeline() {
-  console.log(`[pipeline] Starting — ${new Date().toISOString()} | OpenClaw: ${USE_OPENCLAW}`);
-  let totalSaved = 0;
+  const startedAt = Date.now();
+  console.log(`[pipeline] ===== Starting — ${new Date().toISOString()} | OpenClaw: ${USE_OPENCLAW} =====`);
 
-  for (const category of CATEGORIES) {
-    try {
-      totalSaved += await runCategory(category);
-    } catch (err) {
-      console.error(`[pipeline] ERROR for ${category}: ${err.message}`);
+  const runId = await createPipelineRun();
+
+  let totalFetched = 0;
+  let totalSaved   = 0;
+  const errors     = [];
+
+  try {
+    for (const category of CATEGORIES) {
+      try {
+        const { fetched, saved } = await runCategory(category);
+        totalFetched += fetched;
+        totalSaved   += saved;
+      } catch (err) {
+        console.error(`[pipeline] ERROR for ${category}: ${err.message}`);
+        errors.push(`${category}: ${err.message}`);
+      }
     }
-  }
 
-  console.log(`\n[pipeline] Done — ${totalSaved} total articles saved — ${new Date().toISOString()}`);
+    await completePipelineRun(runId, {
+      articlesFetched: totalFetched,
+      articlesSaved:   totalSaved,
+      categoriesRun:   CATEGORIES,
+      openclawUsed:    USE_OPENCLAW,
+      startedAt,
+    });
+
+    const duration = ((Date.now() - startedAt) / 1000).toFixed(1);
+    console.log(`\n[pipeline] ===== Done in ${duration}s — ${totalSaved} saved — ${new Date().toISOString()} =====`);
+
+    if (errors.length > 0) {
+      console.warn(`[pipeline] ${errors.length} category error(s):`, errors.join(' | '));
+    }
+
+  } catch (err) {
+    console.error('[pipeline] FATAL:', err.message);
+    await failPipelineRun(runId, err.message, startedAt);
+    process.exit(1);
+  }
 }
 
-runPipeline().catch(err => {
-  console.error('[pipeline] FATAL:', err.message);
-  process.exit(1);
-});
+runPipeline();

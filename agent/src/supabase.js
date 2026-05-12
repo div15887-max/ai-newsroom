@@ -37,3 +37,52 @@ export async function insertArticles(articles) {
   if (error) throw new Error(`Supabase insert failed: ${error.message}`);
   return rows.length;
 }
+
+// ── Pipeline run tracking ─────────────────────────────────────────────────────
+
+export async function createPipelineRun() {
+  const { data, error } = await supabase
+    .from('pipeline_runs')
+    .insert({ status: 'running' })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[supabase] Could not create pipeline_run:', error.message);
+    return null;
+  }
+  return data.id;
+}
+
+export async function completePipelineRun(id, { articlesFetched, articlesSaved, categoriesRun, openclawUsed, startedAt }) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('pipeline_runs')
+    .update({
+      status:           'success',
+      completed_at:     new Date().toISOString(),
+      articles_fetched: articlesFetched,
+      articles_saved:   articlesSaved,
+      categories_run:   categoriesRun,
+      openclaw_used:    openclawUsed,
+      duration_seconds: parseFloat(((Date.now() - startedAt) / 1000).toFixed(2)),
+    })
+    .eq('id', id);
+
+  if (error) console.error('[supabase] Could not complete pipeline_run:', error.message);
+}
+
+export async function failPipelineRun(id, errorMessage, startedAt) {
+  if (!id) return;
+  const { error } = await supabase
+    .from('pipeline_runs')
+    .update({
+      status:           'error',
+      completed_at:     new Date().toISOString(),
+      error_message:    String(errorMessage).slice(0, 500),
+      duration_seconds: parseFloat(((Date.now() - startedAt) / 1000).toFixed(2)),
+    })
+    .eq('id', id);
+
+  if (error) console.error('[supabase] Could not fail pipeline_run:', error.message);
+}

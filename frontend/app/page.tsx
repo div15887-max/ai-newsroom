@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { createSupabaseClient } from '@/lib/supabase';
 import type { Article } from '@/lib/supabase';
 import { Header } from '@/components/Header';
@@ -56,6 +57,10 @@ export default async function HomePage({
       </main>
       <footer className="mt-16 border-t border-white/[0.06] py-8 text-center text-xs text-white/20">
         Powered by OpenClaw · Supabase · Vercel · Updated every 6 hours
+        <span className="mx-2">·</span>
+        <Link href="/status" className="hover:text-white/40 transition-colors">
+          System Status
+        </Link>
       </footer>
     </div>
   );

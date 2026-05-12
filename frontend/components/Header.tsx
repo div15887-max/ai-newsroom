@@ -30,6 +30,10 @@ export function Header({ articleCount, activeCategory }: Props) {
                   ? `${activeCategory} · AI-powered autonomous newsfeed`
                   : 'AI-powered autonomous newsfeed'}
               </span>
+              <span>·</span>
+              <Link href="/status" className="hover:text-white/70 transition-colors">
+                System Status
+              </Link>
             </div>
           </div>
           <div className="text-right">
