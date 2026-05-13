@@ -1,0 +1,17 @@
+[Unit]
+Description=AI Newsroom Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/ai-newsroom/agent
+EnvironmentFile=%h/ai-newsroom/agent/.env
+ExecStart=/usr/bin/node telegram-bot.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

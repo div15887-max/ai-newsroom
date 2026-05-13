@@ -8,6 +8,7 @@ import {
   failPipelineRun,
 } from './supabase.js';
 import { summarizeArticles as ollamaSummarize } from './summarizer.js';
+import { notifyTelegram } from './telegram-notify.js';
 
 const USE_OPENCLAW = process.env.USE_OPENCLAW === 'true';
 const CATEGORIES   = Object.keys(CATEGORY_FEEDS);
@@ -89,9 +90,24 @@ async function runPipeline() {
       console.warn(`[pipeline] ${errors.length} category error(s):`, errors.join(' | '));
     }
 
+    const ts = new Date().toISOString();
+    if (errors.length > 0) {
+      await notifyTelegram(
+        `⚠️ *Pipeline complete with errors*\n📰 Saved: ${totalSaved} articles\n⚠️ ${errors.length} category failed: ${errors[0]}\n⏱ ${duration}s\n🕐 ${ts}`
+      );
+    } else {
+      await notifyTelegram(
+        `✅ *Pipeline complete*\n📰 Saved: ${totalSaved} articles\n⏱ ${duration}s\n🕐 ${ts}`
+      );
+    }
+
   } catch (err) {
     console.error('[pipeline] FATAL:', err.message);
     await failPipelineRun(runId, err.message, startedAt);
+    const duration = ((Date.now() - startedAt) / 1000).toFixed(1);
+    await notifyTelegram(
+      `❌ *Pipeline failed*\n💥 ${err.message}\n⏱ ${duration}s\n🕐 ${new Date().toISOString()}`
+    );
     process.exit(1);
   }
 }

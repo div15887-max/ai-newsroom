@@ -69,12 +69,14 @@ AWS EC2 t3.micro (Ubuntu 22.04)
 ```
 ai-newsroom/
 ├── agent/
+│   ├── telegram-bot.js          # Telegram bot (polling — /run, /logs commands)
 │   ├── src/
 │   │   ├── pipeline.js          # Main orchestrator
 │   │   ├── rss.js               # Google News RSS fetcher (4 categories)
 │   │   ├── summarizer.js        # Ollama Cloud LLM summarization
 │   │   ├── supabase.js          # Supabase write helper (dedup + insert)
-│   │   └── openclaw-pipeline.js # OpenClaw agent calls (summarizer + tagger)
+│   │   ├── openclaw-pipeline.js # OpenClaw agent calls (summarizer + tagger)
+│   │   └── telegram-notify.js   # Pipeline completion notifications
 │   ├── openclaw/
 │   │   ├── config/openclaw.json.template
 │   │   └── skills/
@@ -93,9 +95,10 @@ ai-newsroom/
 │   ├── configure-openclaw.sh    # Copies skills, writes ~/.openclaw/env
 │   └── run-pipeline.sh          # Called by systemd on each run
 ├── systemd/
-│   ├── openclaw-gateway.service # Keeps OpenClaw gateway running
+│   ├── openclaw-gateway.service   # Keeps OpenClaw gateway running
 │   ├── newsroom-pipeline.service
-│   └── newsroom-pipeline.timer  # Fires at 00/06/12/18:00 UTC
+│   ├── newsroom-pipeline.timer    # Fires at 00/06/12/18:00 UTC
+│   └── newsroom-telegram.service  # Telegram bot (polling)
 └── README.md
 ```
 
@@ -219,11 +222,54 @@ systemctl --user list-timers   # confirm next trigger shown
 
 ---
 
+## Telegram Control (optional)
+
+Control the pipeline and receive notifications from Telegram.
+
+### Setup
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) → copy the token
+2. Get your chat ID: message [@userinfobot](https://t.me/userinfobot)
+3. Add to `agent/.env` on the VPS:
+   ```
+   TELEGRAM_BOT_TOKEN=your-token-here
+   TELEGRAM_CHAT_ID=your-chat-id-here
+   ```
+4. Install the bot service:
+   ```bash
+   cd ~/ai-newsroom/agent && npm install
+   cp systemd/newsroom-telegram.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable --now newsroom-telegram.service
+   systemctl --user status newsroom-telegram.service
+   ```
+
+### Commands
+
+| Command | Action |
+|---------|--------|
+| `/start` | Confirm bot is active |
+| `/run` | Trigger the pipeline immediately |
+| `/logs` | Fetch the last 20 pipeline log lines |
+
+### Notifications
+
+The pipeline automatically sends a Telegram message when it finishes:
+
+- ✅ **Success**: articles saved, duration, timestamp
+- ⚠️ **Partial**: saved count + first category error
+- ❌ **Fatal failure**: error message + duration
+
+---
+
 ## Monitoring
 
 ```bash
 # Follow live pipeline logs
 journalctl --user -u newsroom-pipeline.service -f
+
+# Follow Telegram bot logs
+journalctl --user -u newsroom-telegram.service -f
 
 # Check scheduled runs
 systemctl --user list-timers
@@ -246,6 +292,9 @@ OLLAMA_MODEL=ministral-3:3b
 OPENCLAW_GATEWAY_URL=http://127.0.0.1:18789
 OPENCLAW_GATEWAY_TOKEN=
 USE_OPENCLAW=true
+TELEGRAM_BOT_TOKEN=          # optional — enables bot + notifications
+TELEGRAM_CHAT_ID=            # optional
+VPS_CONTROL_TOKEN=run-newsroom-2026
 ```
 
 **`frontend/.env.local`** (safe for browser, read-only)
