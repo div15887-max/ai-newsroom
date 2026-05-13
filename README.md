@@ -3,17 +3,19 @@
 An autonomous newsroom that collects, summarises, and displays the latest AI/ML industry news — running 24/7 without manual intervention.
 
 **Live:** https://ai-newsroom-zeta.vercel.app  
-**Repo:** https://github.com/div15887-max/ai-newsroom
+**Status:** https://ai-newsroom-zeta.vercel.app/status  
+**Repo:** https://github.com/div15887-max/ai-newsroom  
+**PRD:** [`mydocs/PRD.md`](mydocs/PRD.md)
 
 ---
 
 ## What it does
 
 1. A pipeline runs every 6 hours on an AWS EC2 VPS
-2. OpenClaw agents fetch the latest articles across 4 categories from Google News RSS
-3. An Ollama LLM writes a concise 2–3 sentence summary for each article
-4. A tagger agent assigns each article to a category (AI · Technology · Startups · Gaming)
-5. Articles are stored in Supabase (duplicates silently skipped via `url UNIQUE`)
+2. A single OpenClaw agent — with three specialised skills — collects, summarises, and tags articles across 4 categories from Google News RSS
+3. The summariser skill writes an 80–120 word factual summary per article (context + significance)
+4. The tagger skill assigns each article to a category: AI · Technology · Startups · Gaming
+5. Articles are stored in Supabase with 3-pass deduplication (batch title, URL, DB title)
 6. A Next.js frontend on Vercel reads from Supabase and shows them with a cinematic newsroom intro
 
 ---
@@ -31,8 +33,10 @@ AWS EC2 t3.micro (Ubuntu 22.04)
   │       ▼
   │  OpenClaw Gateway (port 18789, loopback)
   │       │
+  │       │
+  │       │  Single agent — three skills:
   │       ├─► newsroom-collector  (validates + cleans RSS articles)
-  │       ├─► newsroom-summarizer (Ollama LLM → 2–3 sentence summaries)
+  │       ├─► newsroom-summarizer (Ollama LLM → 80–120 word summaries)
   │       └─► newsroom-tagger     (Ollama LLM → category assignment)
   │                   │
   │       pipeline.js └─► Supabase (service key, write)
@@ -51,7 +55,7 @@ AWS EC2 t3.micro (Ubuntu 22.04)
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| Agent runtime | OpenClaw | Multi-agent orchestration |
+| Agent runtime | OpenClaw | Single agent, three skills (collector · summariser · tagger) |
 | News source | Google News RSS (4 feeds) | Free, no API key, reliable |
 | LLM | Ollama Cloud `ministral-3:3b` | Free tier, fast, low token cost |
 | Database | Supabase (PostgreSQL) | Hosted, free tier, excellent JS SDK |
