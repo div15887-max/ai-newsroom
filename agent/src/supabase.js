@@ -7,15 +7,38 @@ export const supabase = createClient(
 );
 
 export async function filterNewArticles(articles) {
-  const urls = articles.map(a => a.url);
-  const { data, error } = await supabase
+  // 1. Deduplicate within the incoming batch by normalized title
+  const seenTitles = new Set();
+  const batchDeduped = articles.filter(a => {
+    const norm = a.title.trim().toLowerCase();
+    if (seenTitles.has(norm)) return false;
+    seenTitles.add(norm);
+    return true;
+  });
+
+  if (batchDeduped.length === 0) return [];
+
+  // 2. Filter by URL against existing DB rows
+  const urls = batchDeduped.map(a => a.url);
+  const { data: urlData, error: urlError } = await supabase
     .from('articles')
     .select('url')
     .in('url', urls);
+  if (urlError) throw new Error(`Supabase dedup check failed: ${urlError.message}`);
+  const existingUrls = new Set(urlData.map(r => r.url));
+  const afterUrlDedup = batchDeduped.filter(a => !existingUrls.has(a.url));
 
-  if (error) throw new Error(`Supabase dedup check failed: ${error.message}`);
-  const existing = new Set(data.map(r => r.url));
-  return articles.filter(a => !existing.has(a.url));
+  if (afterUrlDedup.length === 0) return [];
+
+  // 3. Filter by normalized title against existing DB titles
+  const { data: titleData, error: titleError } = await supabase
+    .from('articles')
+    .select('title')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (titleError) throw new Error(`Supabase title dedup check failed: ${titleError.message}`);
+  const existingNormTitles = new Set((titleData ?? []).map(r => r.title.trim().toLowerCase()));
+  return afterUrlDedup.filter(a => !existingNormTitles.has(a.title.trim().toLowerCase()));
 }
 
 export async function insertArticles(articles) {

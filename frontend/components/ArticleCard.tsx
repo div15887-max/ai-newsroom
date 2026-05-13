@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import type { Article } from '@/lib/supabase';
 
@@ -23,13 +24,89 @@ const DEFAULT_STYLE = {
 
 function formatDate(d: string | null) {
   if (!d) return '';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function readTime(text: string | null) {
   if (!text) return null;
   const mins = Math.max(1, Math.round(text.trim().split(/\s+/).length / 200));
   return `${mins} min`;
+}
+
+function ArticleModal({ article, onClose }: { article: Article; onClose: () => void }) {
+  const s = STYLE[article.category] ?? DEFAULT_STYLE;
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-lg bg-[#0f0f17] border border-white/[0.10] rounded-2xl overflow-hidden shadow-2xl shadow-black/60"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Category accent bar */}
+        <div className={`h-[3px] w-full bg-gradient-to-r ${s.accent}`} />
+
+        <div className="p-6">
+          {/* Category + date */}
+          <div className="flex items-center justify-between mb-4">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase ${s.badge}`}>
+              {article.category}
+            </span>
+            <time className="text-[11px] text-white/25 tabular-nums">
+              {formatDate(article.published_at)}
+            </time>
+          </div>
+
+          {/* Title */}
+          <h2 className="text-base font-semibold text-white leading-snug mb-4">
+            {article.title}
+          </h2>
+
+          {/* Summary */}
+          {article.summary ? (
+            <p className="text-sm text-white/60 leading-relaxed mb-5">
+              {article.summary}
+            </p>
+          ) : (
+            <p className="text-sm text-white/25 italic mb-5">No summary available.</p>
+          )}
+
+          {/* Source */}
+          <div className="flex items-center gap-1.5 mb-6">
+            <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
+            <span className="text-xs text-white/40 font-medium">{article.source}</span>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center justify-between border-t border-white/[0.06] pt-4">
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+              onClick={e => e.stopPropagation()}
+            >
+              Read Full Article ↗
+            </a>
+            <button
+              onClick={onClose}
+              className="text-xs text-white/30 hover:text-white/60 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function ArticleCard({
@@ -41,75 +118,78 @@ export function ArticleCard({
   index: number;
   featured?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
   const s = STYLE[article.category] ?? DEFAULT_STYLE;
 
   return (
-    <motion.a
-      href={article.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.045, ease: [0.25, 0.1, 0.25, 1] }}
-      className={[
-        'glass-card flex flex-col h-full group cursor-pointer',
-        'hover:bg-white/[0.07] hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-black/40',
-        s.hoverBorder,
-        featured ? 'sm:col-span-2 lg:col-span-3' : '',
-      ].filter(Boolean).join(' ')}
-    >
-      {/* Category accent bar */}
-      <div className={`h-[3px] w-full flex-shrink-0 bg-gradient-to-r ${s.accent}`} />
+    <>
+      <motion.div
+        onClick={() => setOpen(true)}
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: index * 0.045, ease: [0.25, 0.1, 0.25, 1] }}
+        className={[
+          'glass-card flex flex-col h-full group cursor-pointer',
+          'hover:bg-white/[0.07] hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-black/40',
+          s.hoverBorder,
+          featured ? 'sm:col-span-2 lg:col-span-3' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        {/* Category accent bar */}
+        <div className={`h-[3px] w-full flex-shrink-0 bg-gradient-to-r ${s.accent}`} />
 
-      {/* Content */}
-      <div className={`flex flex-col flex-1 ${featured ? 'p-6 sm:p-7' : 'p-5'}`}>
+        {/* Content */}
+        <div className={`flex flex-col flex-1 ${featured ? 'p-6 sm:p-7' : 'p-5'}`}>
 
-        {/* Badge + date */}
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase ${s.badge}`}>
-            {article.category}
-          </span>
-          <time className="text-[11px] text-white/25 tabular-nums shrink-0">
-            {formatDate(article.published_at)}
-          </time>
-        </div>
-
-        {/* Title */}
-        <h3 className={[
-          'font-semibold leading-snug text-white/85 group-hover:text-white transition-colors mb-3',
-          featured ? 'text-base sm:text-xl line-clamp-2' : 'text-sm line-clamp-3',
-        ].join(' ')}>
-          {article.title}
-        </h3>
-
-        {/* Summary */}
-        {article.summary && (
-          <p className={[
-            'text-white/45 leading-relaxed flex-1 mb-4',
-            featured ? 'text-sm line-clamp-4' : 'text-xs line-clamp-3',
-          ].join(' ')}>
-            {article.summary}
-          </p>
-        )}
-
-        {/* Footer */}
-        <div className="mt-auto pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
-            <span className="text-[11px] text-white/35 font-medium truncate">{article.source}</span>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {readTime(article.summary) && (
-              <span className="text-[10px] text-white/20 tabular-nums">
-                {readTime(article.summary)}
-              </span>
-            )}
-            <span className="text-[11px] text-white/20 group-hover:text-white/55 transition-colors">
-              ↗
+          {/* Badge + date */}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-widest uppercase ${s.badge}`}>
+              {article.category}
             </span>
+            <time className="text-[11px] text-white/25 tabular-nums shrink-0">
+              {formatDate(article.published_at)}
+            </time>
+          </div>
+
+          {/* Title */}
+          <h3 className={[
+            'font-semibold leading-snug text-white/85 group-hover:text-white transition-colors mb-3',
+            featured ? 'text-base sm:text-xl line-clamp-2' : 'text-sm line-clamp-3',
+          ].join(' ')}>
+            {article.title}
+          </h3>
+
+          {/* Summary */}
+          {article.summary && (
+            <p className={[
+              'text-white/45 leading-relaxed flex-1 mb-4',
+              featured ? 'text-sm line-clamp-4' : 'text-xs line-clamp-3',
+            ].join(' ')}>
+              {article.summary}
+            </p>
+          )}
+
+          {/* Footer */}
+          <div className="mt-auto pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
+              <span className="text-[11px] text-white/35 font-medium truncate">{article.source}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {readTime(article.summary) && (
+                <span className="text-[10px] text-white/20 tabular-nums">
+                  {readTime(article.summary)}
+                </span>
+              )}
+              <span className="text-[11px] text-white/20 group-hover:text-white/55 transition-colors">
+                ↗
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-    </motion.a>
+      </motion.div>
+
+      {open && <ArticleModal article={article} onClose={() => setOpen(false)} />}
+    </>
   );
 }
